@@ -442,6 +442,8 @@
       months: MN_ES,
       shareLabel: 'Comparte esta reflexión con alguien',
       shareText: 'Visualicé mi vida en semanas. Memento Mori: recuerda que vas a morir.',
+      shareStats: (age, wk, rem, tot, pct) =>
+        `Tengo ${age} · Semanas vividas: ${wk} · Restantes: ${rem} · Total: ${tot} · Vivido: ${pct}%`,
     },
     en: {
       subtitle: 'Each square is one week of your life.',
@@ -459,8 +461,12 @@
       months: MN_EN,
       shareLabel: 'Share this reflection with someone',
       shareText: 'I visualized my life in weeks. Memento Mori: remember you will die.',
+      shareStats: (age, wk, rem, tot, pct) =>
+        `I'm ${age} · Weeks lived: ${wk} · Remaining: ${rem} · Total: ${tot} · Lived: ${pct}%`,
     },
   };
+
+  let lastStats = null;
 
   function s() { return T[lang]; }
 
@@ -496,7 +502,11 @@
   // ============================================================
   function renderShareButtons() {
     const t = s();
-    const text = encodeURIComponent(t.shareText);
+    let shareMsg = t.shareText;
+    if (lastStats) {
+      shareMsg = t.shareStats(lastStats.ageStr, lastStats.lived, lastStats.rem, lastStats.total, lastStats.pct);
+    }
+    const text = encodeURIComponent(shareMsg);
     const url = encodeURIComponent(SITE_URL);
 
     // SVG icons inline
@@ -516,7 +526,10 @@
   }
 
   function copyLink() {
-    navigator.clipboard.writeText(SITE_URL).then(() => {
+    const t = s();
+    let msg = t.shareText;
+    if (lastStats) msg = t.shareStats(lastStats.ageStr, lastStats.lived, lastStats.rem, lastStats.total, lastStats.pct);
+    navigator.clipboard.writeText(msg + ' ' + SITE_URL).then(() => {
       const el = document.getElementById('copy-text');
       el.textContent = lang === 'es' ? 'Copiado!' : 'Copied!';
       setTimeout(() => el.textContent = lang === 'es' ? 'Copiar link' : 'Copy link', 2000);
@@ -686,19 +699,23 @@
     }
 
     // Stats
+    const ageStr = `${age.years} ${t.yrs}, ${age.mo} ${t.mo}`;
     if (mobile) {
       const tm = exp * 12, lm = Math.max(0, tm - age.totalMonths);
       const p = exp > 0 ? ((age.totalMonths / tm) * 100).toFixed(1) : 0;
       document.getElementById('subtitle').textContent = t.subtitleM;
       document.getElementById('stats').innerHTML =
-        `${t.age}: <b>${age.years} ${t.yrs}, ${age.mo} ${t.mo}</b> · ${t.moLived}: <b>${age.totalMonths}</b> · ${t.moLeft}: <b>${lm}</b> · ${t.pct}: <b>${p}%</b>`;
+        `${t.age}: <b>${ageStr}</b> · ${t.moLived}: <b>${age.totalMonths}</b> · ${t.moLeft}: <b>${lm}</b> · ${t.pct}: <b>${p}%</b>`;
+      lastStats = { ageStr, lived: age.totalMonths, rem: lm, total: tm, pct: p };
     } else {
       const tw = exp * 48, lw = Math.max(0, tw - age.totalWeeks);
       const p = exp > 0 ? ((age.totalWeeks / tw) * 100).toFixed(1) : 0;
       document.getElementById('subtitle').textContent = t.subtitle;
       document.getElementById('stats').innerHTML =
-        `${t.age}: <b>${age.years} ${t.yrs}, ${age.mo} ${t.mo}</b> · ${t.wkLived}: <b>${age.totalWeeks.toLocaleString()}</b> · ${t.wkLeft}: <b>${lw.toLocaleString()}</b> · ${t.total}: <b>${tw.toLocaleString()}</b> · ${t.pct}: <b>${p}%</b>`;
+        `${t.age}: <b>${ageStr}</b> · ${t.wkLived}: <b>${age.totalWeeks.toLocaleString()}</b> · ${t.wkLeft}: <b>${lw.toLocaleString()}</b> · ${t.total}: <b>${tw.toLocaleString()}</b> · ${t.pct}: <b>${p}%</b>`;
+      lastStats = { ageStr, lived: age.totalWeeks.toLocaleString(), rem: lw.toLocaleString(), total: tw.toLocaleString(), pct: p };
     }
+    renderShareButtons();
   }
 
   function roundRect(ctx, x, y, w, h, r) {
