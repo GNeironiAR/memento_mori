@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memento Mori</title>
+
+  <!-- Open Graph for social sharing -->
+  <meta property="og:title" content="Memento Mori">
+  <meta property="og:description" content="Visualiza tu vida en semanas. Recuerda que vas a morir.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://memento-mori.pages.dev/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Memento Mori">
+  <meta name="twitter:description" content="Visualiza tu vida en semanas. Cada cuadro es una semana.">
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #141418;
+      color: #c8c4be;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* --- Top bar --- */
+    .top-bar {
+      display: flex;
+      justify-content: flex-end;
+      padding: 12px 0 4px;
+    }
+
+    .lang-toggle {
+      background: #1e1e24;
+      border: 1px solid #2e2d33;
+      border-radius: 6px;
+      display: inline-flex;
+    }
+
+    .lang-toggle button {
+      background: none;
+      border: none;
+      color: #5a5750;
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .lang-toggle button.active {
+      background: #2a2930;
+      color: #c8c4be;
+    }
+
+    /* --- Header --- */
+    header {
+      text-align: center;
+      padding: 8px 0 12px;
+    }
+
+    header h1 {
+      font-size: clamp(1.2rem, 4vw, 2rem);
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #e8e4dd;
+    }
+
+    header p {
+      margin-top: 4px;
+      font-size: clamp(0.7rem, 2vw, 0.85rem);
+      color: #706b63;
+      font-style: italic;
+    }
+
+    /* --- Controls --- */
+    .controls {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      padding: 8px 0;
+      flex-wrap: wrap;
+    }
+
+    .controls label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #706b63;
+      margin-right: 4px;
+    }
+
+    .controls input {
+      padding: 5px 8px;
+      text-align: center;
+      background: #1e1e24;
+      border: 1px solid #2e2d33;
+      border-radius: 4px;
+      color: #e8e4dd;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .controls input[type="number"] { width: 60px; }
+    .controls input[type="date"] { width: 145px; color-scheme: dark; }
+    .controls input:focus { border-color: #504a42; }
+
+    /* --- Stats --- */
+    .stats {
+      text-align: center;
+      padding: 6px 0;
+      font-size: clamp(0.6rem, 1.8vw, 0.75rem);
+      color: #5a5750;
+      line-height: 1.6;
+    }
+
+    .stats b { color: #a09888; font-weight: normal; }
+
+    /* --- Legend --- */
+    .legend {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      padding: 4px 0 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #5a5750;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    .legend-dot.lived { background: #b8a882; }
+    .legend-dot.current { background: #d4785a; }
+    .legend-dot.remaining { background: #28272e; border: 1px solid #3a3840; }
+
+    /* --- Grid --- */
+    .grid-section {
+      padding: 4px 0 16px;
+      display: flex;
+      justify-content: center;
+    }
+
+    canvas { display: block; max-width: 100%; }
+
+    /* --- Reflection --- */
+    .reflection {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 16px 0 12px;
+      text-align: center;
+    }
+
+    .reflection hr {
+      border: none;
+      border-top: 1px solid #2e2d33;
+      width: 60px;
+      margin: 0 auto 12px;
+    }
+
+    .reflection .prompt {
+      font-size: clamp(0.75rem, 2vw, 0.85rem);
+      color: #706b63;
+      font-style: italic;
+      margin-bottom: 10px;
+    }
+
+    .reflection .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .reflection input[type="text"] {
+      flex: 1;
+      min-width: 0;
+      padding: 8px 12px;
+      background: #1e1e24;
+      border: 1px solid #2e2d33;
+      border-radius: 6px;
+      color: #e8e4dd;
+      font-size: 14px;
+      font-style: italic;
+      outline: none;
+    }
+
+    .reflection input::placeholder { color: #4a4640; }
+    .reflection input:focus { border-color: #504a42; }
+
+    .reflection .btn {
+      padding: 8px 16px;
+      background: #28272e;
+      border: 1px solid #2e2d33;
+      border-radius: 6px;
+      color: #a09888;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .reflection .btn:hover {
+      background: #32313a;
+      color: #c8c4be;
+    }
+
+    .reflection .counter {
+      font-size: 11px;
+      color: #4a4640;
+      margin-top: 8px;
+    }
+
+    .reflection .counter b { color: #706b63; font-weight: normal; }
+
+    .word-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 4px 8px;
+      margin-top: 10px;
+    }
+
+    .word-cloud span {
+      color: #706b63;
+      line-height: 1.4;
+      cursor: default;
+      transition: color 0.2s;
+    }
+
+    .word-cloud span:hover { color: #b8a882; }
+
+    /* --- Share section --- */
+    .share-section {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 8px 0 32px;
+      text-align: center;
+    }
+
+    .share-section hr {
+      border: none;
+      border-top: 1px solid #2e2d33;
+      width: 60px;
+      margin: 0 auto 12px;
+    }
+
+    .share-section .share-label {
+      font-size: 12px;
+      color: #5a5750;
+      margin-bottom: 10px;
+    }
+
+    .share-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .share-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: #1e1e24;
+      border: 1px solid #2e2d33;
+      border-radius: 6px;
+      color: #a09888;
+      font-size: 12px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .share-btn:hover {
+      background: #2a2930;
+      color: #c8c4be;
+    }
+
+    .share-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    /* --- Loading indicator for Firebase --- */
+    .loading-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #4a4640;
+      border-radius: 50%;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <div class="top-bar">
+    <div class="lang-toggle">
+      <button id="btn-es" class="active" onclick="setLang('es')">ES</button>
+      <button id="btn-en" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+
+  <header>
+    <h1>Memento Mori</h1>
+    <p id="subtitle"></p>
+  </header>
+
+  <div class="controls">
+    <div>
+      <label id="lbl-birth"></label>
+      <input type="date" id="birthdate" value="1990-01-01">
+    </div>
+    <div>
+      <label id="lbl-exp"></label>
+      <input type="number" id="expectancy" min="1" max="120" value="90">
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div class="legend" id="legend"></div>
+
+  <div class="grid-section">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="reflection">
+    <hr>
+    <p class="prompt" id="ref-prompt"></p>
+    <div class="input-row">
+      <input type="text" id="ref-input" maxlength="200">
+      <button class="btn" id="ref-btn" onclick="submitReflection()"></button>
+    </div>
+    <div class="counter" id="ref-counter"></div>
+    <div class="word-cloud" id="word-cloud"></div>
+  </div>
+
+  <div class="share-section">
+    <hr>
+    <p class="share-label" id="share-label"></p>
+    <div class="share-buttons" id="share-buttons"></div>
+  </div>
+
+</div>
+
+<script>
+  // ============================================================
+  // FIREBASE CONFIG — Replace with your own project credentials
+  // ============================================================
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyABhnJsCQXRJRFIn4xkR_OwXy7MybU1I9U",
+    authDomain: "memento-mori-8eccd.firebaseapp.com",
+    databaseURL: "https://memento-mori-8eccd-default-rtdb.firebaseio.com",
+    projectId: "memento-mori-8eccd",
+    storageBucket: "memento-mori-8eccd.firebasestorage.app",
+    messagingSenderId: "407935535454",
+    appId: "1:407935535454:web:41af785cd85c3be9cd67cf"
+  };
+
+  let db = null;
+  let firebaseReady = false;
+
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    firebaseReady = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+  } catch (e) {
+    console.warn('Firebase not configured, using localStorage fallback.');
+  }
+
+  // ============================================================
+  // STATE
+  // ============================================================
+  let lang = 'es';
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const SITE_URL = location.href.split('?')[0];
+
+  const STOP_WORDS = new Set([
+    'el','la','los','las','un','una','unos','unas','de','del','al','a','en','por','para',
+    'con','sin','que','es','son','fue','ser','no','si','se','su','sus','lo','le','les',
+    'me','mi','mis','te','tu','tus','nos','yo','muy','más','mas','como','pero','ya',
+    'hay','este','esta','esto','eso','esa','ese','todo','toda','todos','todas','cada',
+    'tan','y','o','e','ni','cuando','donde','quien','cual',
+    'the','a','an','is','are','was','were','be','been','being','have','has','had','do',
+    'does','did','will','would','shall','should','may','might','can','could','must',
+    'to','of','in','for','on','with','at','by','from','as','into','through','during',
+    'before','after','above','below','between','out','off','over','under','again',
+    'further','then','once','here','there','when','where','why','how','all','both',
+    'each','few','more','most','other','some','such','no','nor','not','only','own',
+    'same','so','than','too','very','just','about','up','it','its','i','my','me',
+    'we','our','you','your','he','she','they','them','their','this','that','these',
+    'those','what','which','who','whom','and','but','if','or','because','while',
+  ]);
+
+  const MN_ES = ['E','F','M','A','M','J','J','A','S','O','N','D'];
+  const MN_EN = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+
+  const T = {
+    es: {
+      subtitle: 'Cada cuadro es una semana de tu vida.',
+      subtitleM: 'Cada cuadro es un mes de tu vida.',
+      birth: 'Nacimiento', exp: 'Expectativa',
+      age: 'Edad', yrs: 'años', mo: 'meses',
+      wkLived: 'Semanas vividas', wkLeft: 'Restantes',
+      moLived: 'Meses vividos', moLeft: 'Restantes',
+      total: 'Total', pct: 'Vivido',
+      legLived: 'Vivido', legNow: 'Ahora', legLeft: 'Por vivir',
+      decade: (a,b) => `${a}–${b} años`,
+      refPrompt: 'Yo pasé por esta página y me hizo pensar en...',
+      refPh: 'escribe tu reflexión...', refBtn: 'Compartir',
+      counter: n => `<b>${n}</b> ${n===1?'alma reflexionó':'almas reflexionaron'} aquí`,
+      months: MN_ES,
+      shareLabel: 'Comparte esta reflexión con alguien',
+      shareText: 'Visualicé mi vida en semanas. Memento Mori: recuerda que vas a morir.',
+    },
+    en: {
+      subtitle: 'Each square is one week of your life.',
+      subtitleM: 'Each square is one month of your life.',
+      birth: 'Born', exp: 'Expectancy',
+      age: 'Age', yrs: 'yrs', mo: 'mo',
+      wkLived: 'Weeks lived', wkLeft: 'Remaining',
+      moLived: 'Months lived', moLeft: 'Remaining',
+      total: 'Total', pct: 'Lived',
+      legLived: 'Lived', legNow: 'Now', legLeft: 'Remaining',
+      decade: (a,b) => `${a}–${b} years`,
+      refPrompt: 'I visited this page and it made me think about...',
+      refPh: 'write your reflection...', refBtn: 'Share',
+      counter: n => `<b>${n}</b> ${n===1?'soul reflected':'souls reflected'} here`,
+      months: MN_EN,
+      shareLabel: 'Share this reflection with someone',
+      shareText: 'I visualized my life in weeks. Memento Mori: remember you will die.',
+    },
+  };
+
+  function s() { return T[lang]; }
+
+  // ============================================================
+  // i18n
+  // ============================================================
+  function setLang(l) {
+    lang = l;
+    document.getElementById('btn-es').classList.toggle('active', l==='es');
+    document.getElementById('btn-en').classList.toggle('active', l==='en');
+    document.documentElement.lang = l;
+    updateLabels();
+    renderAll();
+  }
+
+  function updateLabels() {
+    const t = s();
+    document.getElementById('lbl-birth').textContent = t.birth;
+    document.getElementById('lbl-exp').textContent = t.exp;
+    document.getElementById('ref-prompt').textContent = t.refPrompt;
+    document.getElementById('ref-input').placeholder = t.refPh;
+    document.getElementById('ref-btn').textContent = t.refBtn;
+    document.getElementById('legend').innerHTML =
+      `<div class="legend-item"><div class="legend-dot lived"></div>${t.legLived}</div>` +
+      `<div class="legend-item"><div class="legend-dot current"></div>${t.legNow}</div>` +
+      `<div class="legend-item"><div class="legend-dot remaining"></div>${t.legLeft}</div>`;
+    document.getElementById('share-label').textContent = t.shareLabel;
+    renderShareButtons();
+  }
+
+  // ============================================================
+  // SHARE
+  // ============================================================
+  function renderShareButtons() {
+    const t = s();
+    const text = encodeURIComponent(t.shareText);
+    const url = encodeURIComponent(SITE_URL);
+
+    // SVG icons inline
+    const xIcon = `<svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`;
+    const waIcon = `<svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>`;
+    const liIcon = `<svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`;
+    const fbIcon = `<svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>`;
+    const copyIcon = `<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
+
+    const el = document.getElementById('share-buttons');
+    el.innerHTML =
+      `<a class="share-btn" href="https://twitter.com/intent/tweet?text=${text}&url=${url}" target="_blank" rel="noopener">${xIcon} X</a>` +
+      `<a class="share-btn" href="https://wa.me/?text=${text}%20${url}" target="_blank" rel="noopener">${waIcon} WhatsApp</a>` +
+      `<a class="share-btn" href="https://www.linkedin.com/sharing/share-offsite/?url=${url}" target="_blank" rel="noopener">${liIcon} LinkedIn</a>` +
+      `<a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=${url}" target="_blank" rel="noopener">${fbIcon} Facebook</a>` +
+      `<button class="share-btn" onclick="copyLink()">${copyIcon} <span id="copy-text">${lang==='es'?'Copiar link':'Copy link'}</span></button>`;
+  }
+
+  function copyLink() {
+    navigator.clipboard.writeText(SITE_URL).then(() => {
+      const el = document.getElementById('copy-text');
+      el.textContent = lang === 'es' ? 'Copiado!' : 'Copied!';
+      setTimeout(() => el.textContent = lang === 'es' ? 'Copiar link' : 'Copy link', 2000);
+    });
+  }
+
+  // ============================================================
+  // AGE CALC
+  // ============================================================
+  function calcAge(birth, now) {
+    const bm = birth.getMonth(), bd = birth.getDate();
+    let years = now.getFullYear() - birth.getFullYear();
+    const had = now.getMonth() > bm || (now.getMonth() === bm && now.getDate() >= bd);
+    if (!had) years--;
+    let mo = had ? now.getMonth() - bm : (12 - bm) + now.getMonth();
+    if (now.getDate() < bd) mo--;
+    mo = Math.max(0, mo);
+    const wk = Math.min(3, Math.floor((now.getDate()-1)/7));
+    return {
+      years, mo,
+      totalWeeks: years * 48 + mo * 4 + wk,
+      totalMonths: years * 12 + mo,
+    };
+  }
+
+  // ============================================================
+  // CANVAS GRID
+  // ============================================================
+  const C_LIVED   = '#b8a882';
+  const C_CURRENT = '#d4785a';
+  const C_REMAIN  = '#28272e';
+  const C_BEYOND  = '#1a1a1f';
+  const C_TEXT    = '#4a4640';
+  const C_TEXT_HI = '#706b63';
+
+  function renderGrid() {
+    const birthVal = document.getElementById('birthdate').value;
+    if (!birthVal) return;
+    const birth = new Date(birthVal + 'T00:00:00');
+    const now = new Date();
+    const exp = Math.max(1, Math.min(120, parseInt(document.getElementById('expectancy').value)||80));
+    const age = calcAge(birth, now);
+    const t = s();
+
+    const pageEl = document.querySelector('.page');
+    const availW = pageEl.clientWidth;
+    const mobile = availW < 560;
+    const colsPerYear = mobile ? 12 : 48;
+
+    const maxYears = Math.max(exp, age.years + 1);
+    const totalDecades = Math.ceil(maxYears / 10);
+
+    const yearLabelW = mobile ? 22 : 20;
+    const decadeGap = mobile ? 8 : 16;
+    const monthSepW = mobile ? 2 : 1;
+    const gapW = 1;
+    const decadeLabelH = 14;
+    const monthHeaderH = 12;
+
+    // Find best decades-per-row
+    let dpr = mobile ? 2 : 3;
+    while (dpr > 1) {
+      const bw = (availW - (dpr - 1) * decadeGap) / dpr;
+      const ca = bw - yearLabelW - 11 * monthSepW;
+      const cs = Math.floor((ca - (colsPerYear - 1) * gapW) / colsPerYear);
+      if (cs >= (mobile ? 10 : 4)) break;
+      dpr--;
+    }
+
+    const blockW = (availW - (dpr - 1) * decadeGap) / dpr;
+    const cellArea = blockW - yearLabelW - 11 * monthSepW;
+    const cs = Math.max(mobile ? 8 : 3, Math.min(mobile ? 24 : 8,
+      Math.floor((cellArea - (colsPerYear - 1) * gapW) / colsPerYear)));
+
+    const actualBlockW = yearLabelW + colsPerYear * cs + (colsPerYear - 1) * gapW + 11 * monthSepW;
+    const rowH = cs + gapW;
+    const decadeRows = Math.ceil(totalDecades / dpr);
+    const decadeBlockH = decadeLabelH + monthHeaderH + 10 * rowH;
+
+    const totalW = dpr * actualBlockW + (dpr - 1) * decadeGap;
+    const totalH = decadeRows * (decadeBlockH + 8);
+
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = totalW * ratio;
+    canvas.height = totalH * ratio;
+    canvas.style.width = totalW + 'px';
+    canvas.style.height = totalH + 'px';
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, totalW, totalH);
+
+    const currentIdx = mobile ? age.totalMonths : age.totalWeeks;
+    const totalIdx = mobile ? exp * 12 : exp * 48;
+
+    let di = 0;
+    for (let dr = 0; dr < decadeRows; dr++) {
+      for (let dc = 0; dc < dpr && di < totalDecades; dc++, di++) {
+        const bx = dc * (actualBlockW + decadeGap);
+        const by = dr * (decadeBlockH + 8);
+        const decStart = di * 10;
+
+        // Decade label
+        ctx.fillStyle = C_TEXT;
+        ctx.font = '10px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(t.decade(decStart, decStart + 9), bx + actualBlockW / 2, by + 10);
+
+        // Month headers
+        const gridLeft = bx + yearLabelW;
+        ctx.font = '9px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        for (let m = 0; m < 12; m++) {
+          let x = gridLeft;
+          for (let pm = 0; pm < m; pm++) {
+            x += (mobile ? 1 : 4) * cs + (mobile ? 0 : 3) * gapW + monthSepW;
+          }
+          const mx = x + (mobile ? cs / 2 : (4 * cs + 3 * gapW) / 2);
+          ctx.fillStyle = C_TEXT;
+          ctx.fillText(t.months[m], mx, by + decadeLabelH + 9);
+        }
+
+        // Year rows
+        const rowsTop = by + decadeLabelH + monthHeaderH;
+        for (let yr = 0; yr < 10; yr++) {
+          const absYear = decStart + yr;
+          const ry = rowsTop + yr * rowH;
+
+          if (absYear < maxYears) {
+            ctx.fillStyle = absYear % 5 === 0 ? C_TEXT_HI : C_TEXT;
+            ctx.font = '9px system-ui, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(String(absYear), bx + yearLabelW - 3, ry + cs - 1);
+          }
+
+          let cx = gridLeft;
+          for (let m = 0; m < 12; m++) {
+            if (m > 0) cx += monthSepW;
+            const cellsInMonth = mobile ? 1 : 4;
+            for (let w = 0; w < cellsInMonth; w++) {
+              if (w > 0) cx += gapW;
+              const idx = mobile ? absYear * 12 + m : absYear * 48 + m * 4 + w;
+
+              let color;
+              if (absYear >= maxYears) color = C_BEYOND;
+              else if (idx === currentIdx) color = C_CURRENT;
+              else if (idx < currentIdx) color = C_LIVED;
+              else if (idx < totalIdx) color = C_REMAIN;
+              else color = C_BEYOND;
+
+              ctx.fillStyle = color;
+              ctx.shadowBlur = 0;
+              const r = cs <= 5 ? 0.5 : 2;
+              roundRect(ctx, cx, ry, cs, cs, r);
+              ctx.fill();
+
+              if (idx === currentIdx) {
+                ctx.shadowColor = C_CURRENT;
+                ctx.shadowBlur = 4;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+              }
+
+              cx += cs;
+            }
+          }
+        }
+      }
+    }
+
+    // Stats
+    if (mobile) {
+      const tm = exp * 12, lm = Math.max(0, tm - age.totalMonths);
+      const p = exp > 0 ? ((age.totalMonths / tm) * 100).toFixed(1) : 0;
+      document.getElementById('subtitle').textContent = t.subtitleM;
+      document.getElementById('stats').innerHTML =
+        `${t.age}: <b>${age.years} ${t.yrs}, ${age.mo} ${t.mo}</b> · ${t.moLived}: <b>${age.totalMonths}</b> · ${t.moLeft}: <b>${lm}</b> · ${t.pct}: <b>${p}%</b>`;
+    } else {
+      const tw = exp * 48, lw = Math.max(0, tw - age.totalWeeks);
+      const p = exp > 0 ? ((age.totalWeeks / tw) * 100).toFixed(1) : 0;
+      document.getElementById('subtitle').textContent = t.subtitle;
+      document.getElementById('stats').innerHTML =
+        `${t.age}: <b>${age.years} ${t.yrs}, ${age.mo} ${t.mo}</b> · ${t.wkLived}: <b>${age.totalWeeks.toLocaleString()}</b> · ${t.wkLeft}: <b>${lw.toLocaleString()}</b> · ${t.total}: <b>${tw.toLocaleString()}</b> · ${t.pct}: <b>${p}%</b>`;
+    }
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
+    ctx.quadraticCurveTo(x+w, y, x+w, y+r); ctx.lineTo(x+w, y+h-r);
+    ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h); ctx.lineTo(x+r, y+h);
+    ctx.quadraticCurveTo(x, y+h, x, y+h-r); ctx.lineTo(x, y+r);
+    ctx.quadraticCurveTo(x, y, x+r, y); ctx.closePath();
+  }
+
+  // ============================================================
+  // REFLECTIONS (Firebase with localStorage fallback)
+  // ============================================================
+  let cachedReflections = [];
+
+  function loadReflections() {
+    if (firebaseReady) {
+      db.ref('reflections').orderByChild('ts').limitToLast(500).on('value', snap => {
+        cachedReflections = [];
+        snap.forEach(child => cachedReflections.push(child.val()));
+        renderReflections();
+      });
+    } else {
+      try { cachedReflections = JSON.parse(localStorage.getItem('memento_reflections') || '[]'); }
+      catch { cachedReflections = []; }
+      renderReflections();
+    }
+  }
+
+  function submitReflection() {
+    const input = document.getElementById('ref-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const entry = { text, ts: Date.now() };
+
+    if (firebaseReady) {
+      db.ref('reflections').push(entry);
+    } else {
+      cachedReflections.push(entry);
+      localStorage.setItem('memento_reflections', JSON.stringify(cachedReflections));
+      renderReflections();
+    }
+
+    input.value = '';
+  }
+
+  document.getElementById('ref-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitReflection();
+  });
+
+  function renderReflections() {
+    const t = s();
+    const refs = cachedReflections;
+    document.getElementById('ref-counter').innerHTML =
+      refs.length > 0 ? t.counter(refs.length) : '';
+
+    const freq = {};
+    for (const r of refs) {
+      r.text.toLowerCase().replace(/[^a-záéíóúüñ\s]/gi, '').split(/\s+/)
+        .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+        .forEach(w => freq[w] = (freq[w]||0) + 1);
+    }
+    const words = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0, 40);
+    const cloud = document.getElementById('word-cloud');
+
+    if (!words.length) { cloud.innerHTML = ''; return; }
+    const max = words[0][1];
+    cloud.innerHTML = words.map(([w, f]) => {
+      const sz = 0.7 + (f/max) * 1.3;
+      const op = 0.4 + (f/max) * 0.6;
+      return `<span style="font-size:${sz.toFixed(2)}rem;opacity:${op.toFixed(2)}">${w}</span>`;
+    }).join('');
+  }
+
+  // ============================================================
+  // INIT
+  // ============================================================
+  function renderAll() {
+    updateLabels();
+    renderGrid();
+    renderReflections();
+  }
+
+  document.getElementById('birthdate').addEventListener('input', renderAll);
+  document.getElementById('expectancy').addEventListener('input', renderAll);
+
+  let rt;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderAll, 100); });
+
+  updateLabels();
+  renderGrid();
+  loadReflections();
+</script>
+</body>
+</html>
