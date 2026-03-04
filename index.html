@@ -164,10 +164,25 @@
 
     canvas { display: block; max-width: 100%; }
 
-    /* --- Download button --- */
-    .download-row {
-      text-align: center;
-      padding: 8px 0 4px;
+    /* --- Share panel (hidden until reflection submitted) --- */
+    .share-panel {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transition: max-height 0.5s ease, opacity 0.4s ease, margin 0.4s ease;
+      margin-top: 0;
+    }
+
+    .share-panel.visible {
+      max-height: 200px;
+      opacity: 1;
+      margin-top: 16px;
+    }
+
+    .share-panel .share-label {
+      font-size: 14px;
+      color: #5a5750;
+      margin-bottom: 10px;
     }
 
     .btn-download {
@@ -182,6 +197,7 @@
       font-size: 14px;
       cursor: pointer;
       transition: all 0.2s;
+      margin-top: 10px;
     }
 
     .btn-download:hover {
@@ -306,27 +322,6 @@
       margin-bottom: 2px;
     }
 
-    /* --- Share section --- */
-    .share-section {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 8px 0 32px;
-      text-align: center;
-    }
-
-    .share-section hr {
-      border: none;
-      border-top: 1px solid #2e2d33;
-      width: 60px;
-      margin: 0 auto 12px;
-    }
-
-    .share-section .share-label {
-      font-size: 14px;
-      color: #5a5750;
-      margin-bottom: 10px;
-    }
-
     .share-buttons {
       display: flex;
       gap: 10px;
@@ -409,13 +404,6 @@
     <canvas id="canvas"></canvas>
   </div>
 
-  <div class="download-row">
-    <button class="btn-download" id="btn-download" onclick="downloadImage()">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-      <span id="dl-label"></span>
-    </button>
-  </div>
-
   <div class="reflection">
     <hr>
     <p class="prompt" id="ref-prompt"></p>
@@ -423,15 +411,17 @@
       <input type="text" id="ref-input" maxlength="200">
       <button class="btn" id="ref-btn" onclick="submitReflection()"></button>
     </div>
+    <div class="share-panel" id="share-panel">
+      <p class="share-label" id="share-label"></p>
+      <div class="share-buttons" id="share-buttons"></div>
+      <button class="btn-download" id="btn-download" onclick="downloadImage()">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        <span id="dl-label"></span>
+      </button>
+    </div>
     <div class="counter" id="ref-counter"></div>
     <div class="word-cloud" id="word-cloud"></div>
     <div class="recent-refs" id="recent-refs"></div>
-  </div>
-
-  <div class="share-section">
-    <hr>
-    <p class="share-label" id="share-label"></p>
-    <div class="share-buttons" id="share-buttons"></div>
   </div>
 
 </div>
@@ -506,7 +496,7 @@
       counter: n => `<b>${n}</b> ${n===1?'alma reflexionó':'almas reflexionaron'} aquí`,
       months: MN_ES,
       dlLabel: 'Descargar mi grilla',
-      shareLabel: 'Comparte esta reflexión con alguien',
+      shareLabel: 'Ahora compartilo con el mundo',
       shareText: 'Visualicé mi vida en semanas. Memento Mori: recuerda que vas a morir.',
       shareStats: (pctLeft) =>
         `Ya usé el ${pctLeft}% de mi vida. ¿Y vos cuánto te queda? Memento Mori.`,
@@ -526,7 +516,7 @@
       counter: n => `<b>${n}</b> ${n===1?'soul reflected':'souls reflected'} here`,
       months: MN_EN,
       dlLabel: 'Download my grid',
-      shareLabel: 'Share this reflection with someone',
+      shareLabel: 'Now share it with the world',
       shareText: 'I visualized my life in weeks. Memento Mori: remember you will die.',
       shareStats: (pctLeft) =>
         `I've already used ${pctLeft}% of my life. How much do you have left? Memento Mori.`,
@@ -568,13 +558,18 @@
   // ============================================================
   // SHARE
   // ============================================================
+  function buildShareMsg() {
+    const t = s();
+    let msg = lastStats ? t.shareStats(lastStats.pct) : t.shareText;
+    if (userReflection) {
+      msg = `"${userReflection}" — ${msg}`;
+    }
+    return msg;
+  }
+
   function renderShareButtons() {
     const t = s();
-    let shareMsg = t.shareText;
-    if (lastStats) {
-      shareMsg = t.shareStats(lastStats.pct);
-    }
-    const text = encodeURIComponent(shareMsg);
+    const text = encodeURIComponent(buildShareMsg());
     const url = encodeURIComponent(SITE_URL);
 
     // SVG icons inline
@@ -598,13 +593,15 @@
     if (!gridCanvas.width || !lastStats) return;
 
     const t = s();
+    const dpr = window.devicePixelRatio || 1;
     const pad = 40;
     const topH = 100;
+    const refH = userReflection ? 50 : 0;
     const botH = 50;
-    const gw = gridCanvas.width / (window.devicePixelRatio || 1);
-    const gh = gridCanvas.height / (window.devicePixelRatio || 1);
+    const gw = gridCanvas.width / dpr;
+    const gh = gridCanvas.height / dpr;
     const w = gw + pad * 2;
-    const h = topH + gh + botH;
+    const h = topH + gh + refH + botH;
 
     const ratio = 2;
     const c = document.createElement('canvas');
@@ -624,26 +621,33 @@
     cx.fillText('M E M E N T O   M O R I', w / 2, 35);
 
     // Stats line
-    const statsEl = document.getElementById('stats');
-    const statsText = statsEl.textContent;
+    const statsText = document.getElementById('stats').textContent;
     cx.fillStyle = '#a09888';
     cx.font = '13px system-ui, sans-serif';
     cx.fillText(statsText, w / 2, 58);
 
     // Provocative line
-    const msg = t.shareStats(lastStats.pct);
     cx.fillStyle = '#d4785a';
     cx.font = 'italic 14px system-ui, sans-serif';
-    cx.fillText(msg, w / 2, 80);
+    cx.fillText(t.shareStats(lastStats.pct), w / 2, 80);
 
-    // Grid - draw from existing canvas
+    // Grid - use full pixel dimensions as source
     cx.drawImage(gridCanvas, 0, 0, gridCanvas.width, gridCanvas.height, pad, topH, gw, gh);
+
+    // User reflection
+    if (userReflection) {
+      const refText = userReflection.length > 80 ? userReflection.slice(0, 80) + '…' : userReflection;
+      cx.fillStyle = '#706b63';
+      cx.font = 'italic 13px system-ui, sans-serif';
+      cx.textAlign = 'center';
+      cx.fillText(`"${refText}"`, w / 2, topH + gh + 30);
+    }
 
     // Footer
     cx.fillStyle = '#4a4640';
     cx.font = '11px system-ui, sans-serif';
     cx.textAlign = 'center';
-    cx.fillText('gneironiar.github.io/memento_mori', w / 2, topH + gh + 30);
+    cx.fillText('gneironiar.github.io/memento_mori', w / 2, topH + gh + refH + 30);
 
     // Download
     const link = document.createElement('a');
@@ -653,10 +657,7 @@
   }
 
   function copyLink() {
-    const t = s();
-    let msg = t.shareText;
-    if (lastStats) msg = t.shareStats(lastStats.pct);
-    navigator.clipboard.writeText(msg + ' ' + SITE_URL).then(() => {
+    navigator.clipboard.writeText(buildShareMsg() + ' ' + SITE_URL).then(() => {
       const el = document.getElementById('copy-text');
       el.textContent = lang === 'es' ? 'Copiado!' : 'Copied!';
       setTimeout(() => el.textContent = lang === 'es' ? 'Copiar link' : 'Copy link', 2000);
@@ -873,10 +874,16 @@
     }
   }
 
+  let userReflection = '';
+
   function submitReflection() {
     const input = document.getElementById('ref-input');
     const text = input.value.trim();
-    if (!text) return;
+    if (!text) {
+      input.style.borderColor = '#d4785a';
+      setTimeout(() => input.style.borderColor = '', 1500);
+      return;
+    }
 
     const entry = { text, ts: Date.now() };
 
@@ -888,7 +895,16 @@
       renderReflections();
     }
 
+    userReflection = text;
     input.value = '';
+    input.disabled = true;
+    input.style.opacity = '0.5';
+    document.getElementById('ref-btn').disabled = true;
+    document.getElementById('ref-btn').style.opacity = '0.5';
+
+    // Rebuild share buttons with reflection included, then reveal
+    renderShareButtons();
+    document.getElementById('share-panel').classList.add('visible');
   }
 
   document.getElementById('ref-input').addEventListener('keydown', e => {
