@@ -164,6 +164,32 @@
 
     canvas { display: block; max-width: 100%; }
 
+    /* --- Download button --- */
+    .download-row {
+      text-align: center;
+      padding: 8px 0 4px;
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      background: #28272e;
+      border: 1px solid #3a3840;
+      border-radius: 8px;
+      color: #b8a882;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-download:hover {
+      background: #32313a;
+      color: #d4c9a8;
+      border-color: #504a42;
+    }
+
     /* --- Reflection --- */
     .reflection {
       max-width: 600px;
@@ -248,6 +274,37 @@
     }
 
     .word-cloud span:hover { color: #b8a882; }
+
+    .recent-refs {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .recent-refs .ref-item {
+      font-size: 13px;
+      color: #5a5750;
+      font-style: italic;
+      line-height: 1.5;
+      padding: 8px 14px;
+      background: #1a1a1f;
+      border-radius: 6px;
+      border-left: 2px solid #28272e;
+      text-align: left;
+    }
+
+    .recent-refs .ref-item:hover {
+      border-left-color: #d4785a;
+    }
+
+    .recent-refs-label {
+      font-size: 11px;
+      color: #4a4640;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 2px;
+    }
 
     /* --- Share section --- */
     .share-section {
@@ -352,6 +409,13 @@
     <canvas id="canvas"></canvas>
   </div>
 
+  <div class="download-row">
+    <button class="btn-download" id="btn-download" onclick="downloadImage()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      <span id="dl-label"></span>
+    </button>
+  </div>
+
   <div class="reflection">
     <hr>
     <p class="prompt" id="ref-prompt"></p>
@@ -361,6 +425,7 @@
     </div>
     <div class="counter" id="ref-counter"></div>
     <div class="word-cloud" id="word-cloud"></div>
+    <div class="recent-refs" id="recent-refs"></div>
   </div>
 
   <div class="share-section">
@@ -440,10 +505,11 @@
       refPh: 'escribe tu reflexión...', refBtn: 'Compartir',
       counter: n => `<b>${n}</b> ${n===1?'alma reflexionó':'almas reflexionaron'} aquí`,
       months: MN_ES,
+      dlLabel: 'Descargar mi grilla',
       shareLabel: 'Comparte esta reflexión con alguien',
       shareText: 'Visualicé mi vida en semanas. Memento Mori: recuerda que vas a morir.',
-      shareStats: (age, wk, rem, tot, pct) =>
-        `Tengo ${age} · Semanas vividas: ${wk} · Restantes: ${rem} · Total: ${tot} · Vivido: ${pct}%`,
+      shareStats: (pctLeft) =>
+        `Ya usé el ${pctLeft}% de mi vida. ¿Y vos cuánto te queda? Memento Mori.`,
     },
     en: {
       subtitle: 'Each square is one week of your life.',
@@ -459,10 +525,11 @@
       refPh: 'write your reflection...', refBtn: 'Share',
       counter: n => `<b>${n}</b> ${n===1?'soul reflected':'souls reflected'} here`,
       months: MN_EN,
+      dlLabel: 'Download my grid',
       shareLabel: 'Share this reflection with someone',
       shareText: 'I visualized my life in weeks. Memento Mori: remember you will die.',
-      shareStats: (age, wk, rem, tot, pct) =>
-        `I'm ${age} · Weeks lived: ${wk} · Remaining: ${rem} · Total: ${tot} · Lived: ${pct}%`,
+      shareStats: (pctLeft) =>
+        `I've already used ${pctLeft}% of my life. How much do you have left? Memento Mori.`,
     },
   };
 
@@ -494,6 +561,7 @@
       `<div class="legend-item"><div class="legend-dot current"></div>${t.legNow}</div>` +
       `<div class="legend-item"><div class="legend-dot remaining"></div>${t.legLeft}</div>`;
     document.getElementById('share-label').textContent = t.shareLabel;
+    document.getElementById('dl-label').textContent = t.dlLabel;
     renderShareButtons();
   }
 
@@ -504,7 +572,7 @@
     const t = s();
     let shareMsg = t.shareText;
     if (lastStats) {
-      shareMsg = t.shareStats(lastStats.ageStr, lastStats.lived, lastStats.rem, lastStats.total, lastStats.pct);
+      shareMsg = t.shareStats(lastStats.pct);
     }
     const text = encodeURIComponent(shareMsg);
     const url = encodeURIComponent(SITE_URL);
@@ -525,10 +593,69 @@
       `<button class="share-btn" onclick="copyLink()">${copyIcon} <span id="copy-text">${lang==='es'?'Copiar link':'Copy link'}</span></button>`;
   }
 
+  function downloadImage() {
+    const gridCanvas = document.getElementById('canvas');
+    if (!gridCanvas.width || !lastStats) return;
+
+    const t = s();
+    const pad = 40;
+    const topH = 100;
+    const botH = 50;
+    const gw = gridCanvas.width / (window.devicePixelRatio || 1);
+    const gh = gridCanvas.height / (window.devicePixelRatio || 1);
+    const w = gw + pad * 2;
+    const h = topH + gh + botH;
+
+    const ratio = 2;
+    const c = document.createElement('canvas');
+    c.width = w * ratio;
+    c.height = h * ratio;
+    const cx = c.getContext('2d');
+    cx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    // Background
+    cx.fillStyle = '#141418';
+    cx.fillRect(0, 0, w, h);
+
+    // Title
+    cx.fillStyle = '#e8e4dd';
+    cx.font = '300 22px system-ui, sans-serif';
+    cx.textAlign = 'center';
+    cx.fillText('M E M E N T O   M O R I', w / 2, 35);
+
+    // Stats line
+    const statsEl = document.getElementById('stats');
+    const statsText = statsEl.textContent;
+    cx.fillStyle = '#a09888';
+    cx.font = '13px system-ui, sans-serif';
+    cx.fillText(statsText, w / 2, 58);
+
+    // Provocative line
+    const msg = t.shareStats(lastStats.pct);
+    cx.fillStyle = '#d4785a';
+    cx.font = 'italic 14px system-ui, sans-serif';
+    cx.fillText(msg, w / 2, 80);
+
+    // Grid - draw from existing canvas
+    cx.drawImage(gridCanvas, 0, 0, gridCanvas.width, gridCanvas.height, pad, topH, gw, gh);
+
+    // Footer
+    cx.fillStyle = '#4a4640';
+    cx.font = '11px system-ui, sans-serif';
+    cx.textAlign = 'center';
+    cx.fillText('gneironiar.github.io/memento_mori', w / 2, topH + gh + 30);
+
+    // Download
+    const link = document.createElement('a');
+    link.download = 'memento-mori.png';
+    link.href = c.toDataURL('image/png');
+    link.click();
+  }
+
   function copyLink() {
     const t = s();
     let msg = t.shareText;
-    if (lastStats) msg = t.shareStats(lastStats.ageStr, lastStats.lived, lastStats.rem, lastStats.total, lastStats.pct);
+    if (lastStats) msg = t.shareStats(lastStats.pct);
     navigator.clipboard.writeText(msg + ' ' + SITE_URL).then(() => {
       const el = document.getElementById('copy-text');
       el.textContent = lang === 'es' ? 'Copiado!' : 'Copied!';
@@ -790,6 +917,20 @@
       const op = 0.4 + (f/max) * 0.6;
       return `<span style="font-size:${sz.toFixed(2)}rem;opacity:${op.toFixed(2)}">${w}</span>`;
     }).join('');
+
+    // Recent reflections
+    const recentEl = document.getElementById('recent-refs');
+    const recent = refs.slice(-5).reverse();
+    if (recent.length > 0) {
+      const lbl = lang === 'es' ? 'Otros reflexionaron' : 'Others reflected';
+      recentEl.innerHTML =
+        `<div class="recent-refs-label">${lbl}</div>` +
+        recent.map(r =>
+          `<div class="ref-item">"${r.text.length > 120 ? r.text.slice(0, 120) + '…' : r.text}"</div>`
+        ).join('');
+    } else {
+      recentEl.innerHTML = '';
+    }
   }
 
   // ============================================================
