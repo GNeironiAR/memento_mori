@@ -868,11 +868,11 @@
 
   function loadReflections() {
     if (firebaseReady) {
-      db.ref('reflections').limitToLast(500).on('value', snap => {
+      db.ref('reflections').orderByKey().limitToLast(500).on('value', snap => {
         cachedReflections = [];
         snap.forEach(child => cachedReflections.push(child.val()));
         renderReflections();
-      });
+      }, err => console.error('Firebase read failed:', err));
     } else {
       try { cachedReflections = JSON.parse(localStorage.getItem('memento_reflections') || '[]'); }
       catch { cachedReflections = []; }
