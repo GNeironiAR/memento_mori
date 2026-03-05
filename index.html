@@ -500,6 +500,8 @@
       shareText: 'Visualicé mi vida en semanas. Memento Mori: recuerda que vas a morir.',
       shareStats: (pctLeft) =>
         `Ya usé el ${pctLeft}% de mi vida. ¿Y vos cuánto te queda? Memento Mori.`,
+      shareStatsRef: (pctLeft, ref) =>
+        `Ya usé el ${pctLeft}% de mi vida, me hizo pensar en "${ref}". ¿Y vos cuánto te queda? Memento Mori.`,
     },
     en: {
       subtitle: 'Each square is one week of your life.',
@@ -520,6 +522,8 @@
       shareText: 'I visualized my life in weeks. Memento Mori: remember you will die.',
       shareStats: (pctLeft) =>
         `I've already used ${pctLeft}% of my life. How much do you have left? Memento Mori.`,
+      shareStatsRef: (pctLeft, ref) =>
+        `I've already used ${pctLeft}% of my life, it made me think about "${ref}". How much do you have left? Memento Mori.`,
     },
   };
 
@@ -560,11 +564,13 @@
   // ============================================================
   function buildShareMsg() {
     const t = s();
-    let msg = lastStats ? t.shareStats(lastStats.pct) : t.shareText;
-    if (userReflection) {
-      msg = `"${userReflection}" — ${msg}`;
+    if (lastStats && userReflection) {
+      return t.shareStatsRef(lastStats.pct, userReflection);
     }
-    return msg;
+    if (lastStats) {
+      return t.shareStats(lastStats.pct);
+    }
+    return t.shareText;
   }
 
   function renderShareButtons() {
@@ -926,13 +932,16 @@
     const words = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0, 40);
     const cloud = document.getElementById('word-cloud');
 
-    if (!words.length) { cloud.innerHTML = ''; return; }
-    const max = words[0][1];
-    cloud.innerHTML = words.map(([w, f]) => {
-      const sz = 0.85 + (f/max) * 1.4;
-      const op = 0.4 + (f/max) * 0.6;
-      return `<span style="font-size:${sz.toFixed(2)}rem;opacity:${op.toFixed(2)}">${w}</span>`;
-    }).join('');
+    if (!words.length) {
+      cloud.innerHTML = '';
+    } else {
+      const max = words[0][1];
+      cloud.innerHTML = words.map(([w, f]) => {
+        const sz = 0.85 + (f/max) * 1.4;
+        const op = 0.4 + (f/max) * 0.6;
+        return `<span style="font-size:${sz.toFixed(2)}rem;opacity:${op.toFixed(2)}">${w}</span>`;
+      }).join('');
+    }
 
     // Recent reflections
     const recentEl = document.getElementById('recent-refs');
