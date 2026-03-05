@@ -868,9 +868,11 @@
 
   function loadReflections() {
     if (firebaseReady) {
-      db.ref('reflections').orderByKey().limitToLast(500).on('value', snap => {
+      db.ref('reflections').on('value', snap => {
         cachedReflections = [];
-        snap.forEach(child => cachedReflections.push(child.val()));
+        if (snap.exists()) {
+          snap.forEach(child => cachedReflections.push(child.val()));
+        }
         renderReflections();
       }, err => console.error('Firebase read failed:', err));
     } else {
