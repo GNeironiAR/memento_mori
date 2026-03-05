@@ -874,7 +874,13 @@
         console.log('Firebase snap received, exists:', snap.exists(), 'children:', snap.numChildren());
         cachedReflections = [];
         if (snap.exists()) {
-          snap.forEach(child => cachedReflections.push(child.val()));
+          snap.forEach(child => {
+            const val = child.val();
+            console.log('Child:', child.key, val);
+            if (val && val.text) {
+              cachedReflections.push(val);
+            }
+          });
         }
         console.log('Cached reflections:', cachedReflections.length);
         renderReflections();
