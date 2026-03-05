@@ -447,9 +447,8 @@
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
     firebaseReady = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
-    console.log('Firebase ready:', firebaseReady);
   } catch (e) {
-    console.warn('Firebase init error:', e);
+    console.warn('Firebase not configured, using localStorage fallback.');
   }
 
   // ============================================================
@@ -869,20 +868,14 @@
 
   function loadReflections() {
     if (firebaseReady) {
-      console.log('Loading reflections from Firebase...');
       db.ref('reflections').on('value', snap => {
-        console.log('Firebase snap received, exists:', snap.exists(), 'children:', snap.numChildren());
         cachedReflections = [];
         if (snap.exists()) {
           snap.forEach(child => {
             const val = child.val();
-            console.log('Child:', child.key, val);
-            if (val && val.text) {
-              cachedReflections.push(val);
-            }
+            if (val && val.text) cachedReflections.push(val);
           });
         }
-        console.log('Cached reflections:', cachedReflections.length);
         renderReflections();
       }, err => console.error('Firebase read failed:', err));
     } else {
@@ -906,11 +899,7 @@
     const entry = { text, ts: Date.now() };
 
     if (firebaseReady) {
-      db.ref('reflections').push(entry)
-        .then(() => console.log('Reflection saved to Firebase'))
-        .catch(err => {
-          console.error('Firebase write failed:', err);
-          // Fallback: add locally so it shows immediately
+      db.ref('reflections').push(entry).catch(() => {
           cachedReflections.push(entry);
           renderReflections();
         });
