@@ -868,7 +868,7 @@
 
   function loadReflections() {
     if (firebaseReady) {
-      db.ref('reflections').orderByChild('ts').limitToLast(500).on('value', snap => {
+      db.ref('reflections').limitToLast(500).on('value', snap => {
         cachedReflections = [];
         snap.forEach(child => cachedReflections.push(child.val()));
         renderReflections();
@@ -894,7 +894,14 @@
     const entry = { text, ts: Date.now() };
 
     if (firebaseReady) {
-      db.ref('reflections').push(entry);
+      db.ref('reflections').push(entry)
+        .then(() => console.log('Reflection saved to Firebase'))
+        .catch(err => {
+          console.error('Firebase write failed:', err);
+          // Fallback: add locally so it shows immediately
+          cachedReflections.push(entry);
+          renderReflections();
+        });
     } else {
       cachedReflections.push(entry);
       localStorage.setItem('memento_reflections', JSON.stringify(cachedReflections));
