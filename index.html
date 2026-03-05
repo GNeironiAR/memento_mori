@@ -655,11 +655,15 @@
     cx.textAlign = 'center';
     cx.fillText('gneironiar.github.io/memento_mori', w / 2, topH + gh + refH + 30);
 
-    // Download
-    const link = document.createElement('a');
-    link.download = 'memento-mori.png';
-    link.href = c.toDataURL('image/png');
-    link.click();
+    // Download using Blob for proper PNG file
+    c.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = 'memento-mori.png';
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
   }
 
   function copyLink() {
