@@ -447,8 +447,9 @@
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
     firebaseReady = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+    console.log('Firebase ready:', firebaseReady);
   } catch (e) {
-    console.warn('Firebase not configured, using localStorage fallback.');
+    console.warn('Firebase init error:', e);
   }
 
   // ============================================================
@@ -868,11 +869,14 @@
 
   function loadReflections() {
     if (firebaseReady) {
+      console.log('Loading reflections from Firebase...');
       db.ref('reflections').on('value', snap => {
+        console.log('Firebase snap received, exists:', snap.exists(), 'children:', snap.numChildren());
         cachedReflections = [];
         if (snap.exists()) {
           snap.forEach(child => cachedReflections.push(child.val()));
         }
+        console.log('Cached reflections:', cachedReflections.length);
         renderReflections();
       }, err => console.error('Firebase read failed:', err));
     } else {
