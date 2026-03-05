@@ -661,8 +661,13 @@
       const link = document.createElement('a');
       link.download = 'memento-mori.png';
       link.href = url;
+      link.style.display = 'none';
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 1000);
     }, 'image/png');
   }
 
